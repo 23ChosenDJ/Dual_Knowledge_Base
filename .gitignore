@@ -1,0 +1,28 @@
+# Python virtual environment
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# RAG vector store indexes (regenerate with build_index.py)
+chroma_doc_db/
+chroma_code_db/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Claude Code personal settings (do not share)
+.claude/
+
+# OS junk files
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Temp / test files
+*.tmp
