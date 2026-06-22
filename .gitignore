@@ -26,3 +26,8 @@ Desktop.ini
 
 # Temp / test files
 *.tmp
+docs_temp/
+langchain_dual_rag/docs/md/
+langchain_dual_rag/docs/pdf/
+langchain_dual_rag/docs/txt/
+download_real_docs.py

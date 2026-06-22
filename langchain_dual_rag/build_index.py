@@ -34,25 +34,87 @@ from langchain_ollama import OllamaEmbeddings
 
 from config import *
 
+import time
+
 SEP = "=" * 60
 
 
 def _build_store(documents: list, embeddings, persist_dir: str, label: str):
-    """统一入库：优先批量 embedding，失败则逐条兜底"""
-    print(f"\n  [{label}] 正在编码 {len(documents)} 条文本...")
-    texts = [d.page_content for d in documents]
+    """截断超长 chunk + 大批量 Ollama 调用，最小化 CPU 编码耗时"""
+    # 截断文本到 MAX_EMBED_CHARS，大幅减少 tokenization 开销
+    max_chars = MAX_EMBED_CHARS if "MAX_EMBED_CHARS" in dir() else 2500
+    texts = []
+    truncated = 0
+    for d in documents:
+        raw = d.page_content
+        if len(raw) > max_chars:
+            texts.append(raw[:max_chars])
+            truncated += 1
+        else:
+            texts.append(raw)
 
-    # 尝试批量编码（Ollama 单次 API 调用）
-    try:
-        vectors = embeddings.embed_documents(texts)
-        print(f"       [OK] 批量编码完成 ({len(vectors)} 条)")
-    except Exception:
-        print(f"       [!] 批量编码失败，切换到逐条编码...")
-        vectors = []
-        for i, text in enumerate(texts):
-            if (i + 1) % 10 == 0:
-                print(f"       ... {i + 1}/{len(texts)}")
-            vectors.append(embeddings.embed_query(text))
+    total = len(texts)
+    total_chars = sum(len(t) for t in texts)
+    print(f"\n  [{label}] 正在编码 {total} 条文本 ({total_chars} 字符)...")
+    if truncated:
+        print(f"        {truncated}/{total} 条被截断到 {max_chars} chars")
+    print(f"        (nomic-embed-text + 纯CPU, 估计 {total_chars // 1000 * 2 // 60} 分钟)")
+
+    # 每个 batch 约 4000 字符，保证不超 context(2048 tokens ≈ 3000 chars)
+    # 对于 900+ chars 的文本，batch=4；极短的 batch 更大
+    BATCH_CHARS = 4000
+    batches = []
+    current_batch = []
+    current_chars = 0
+    for t in texts:
+        t_len = len(t)
+        if current_chars + t_len > BATCH_CHARS and current_batch:
+            batches.append(current_batch)
+            current_batch = [t]
+            current_chars = t_len
+        else:
+            current_batch.append(t)
+            current_chars += t_len
+    if current_batch:
+        batches.append(current_batch)
+
+    total_batches = len(batches)
+    print(f"        {total_batches} 批次 (每批 ≤ {BATCH_CHARS} chars)")
+
+    vectors = []
+    t_start = time.time()
+
+    for i, batch in enumerate(batches):
+        batch_start = time.time()
+        try:
+            batch_vecs = embeddings.embed_documents(batch)
+            vectors.extend(batch_vecs)
+            elapsed = time.time() - batch_start
+            eta_sec = int((total_batches - i - 1) * elapsed)
+            pct = (i + 1) * 100 // total_batches
+            print(f"       [{i+1}/{total_batches}] {pct}% {len(batch)}条 {elapsed:.0f}s | "
+                  f"ETA: {eta_sec//60}m{eta_sec%60}s | {len(vectors)}/{total}")
+        except Exception as e:
+            print(f"       [{i+1}/{total_batches}] 批失败, 逐条兜底 ({len(batch)}条)...")
+            for text in batch:
+                try:
+                    vectors.append(embeddings.embed_query(text))
+                except Exception:
+                    vectors.append([0.0] * 768)
+
+    total_elapsed = time.time() - t_start
+    print(f"       [OK] 全部完成: {len(vectors)}/{total} 条, 总耗时 {total_elapsed:.0f}s"
+          f" ({total_elapsed/60:.1f}分钟)")
+
+    print(f"  [{label}] 写入 {persist_dir} ...")
+    SimpleVectorStore._from_vectors(
+        documents=documents,
+        vectors=vectors,
+        persist_directory=persist_dir,
+    )
+
+    print(f"       [OK] 编码完成 ({len(vectors)} 条)" if len(vectors) == total
+          else f"       [WARN] {len(vectors)}/{total} 条编码成功")
 
     print(f"  [{label}] 写入 {persist_dir} ...")
     SimpleVectorStore._from_vectors(
@@ -136,6 +198,8 @@ def build_doc_index(rebuild: bool = False):
     )
     split_docs = doc_splitter.split_documents(all_docs)
     print(f"       [OK] {len(all_docs)} 原始 -> {len(split_docs)} 片段")
+    print(f"       预估耗时: ~{len(split_docs) // 10 * 45 // 60} 分钟"
+          f" ({len(split_docs)} chunks × ~4.5s/条)")
 
     # 入库
     embeddings = OllamaEmbeddings(model=EMBED_MODEL)
