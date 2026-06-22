@@ -161,17 +161,20 @@ def retrieve(question: str, route: str) -> list:
 # ============================================================
 
 def format_context(docs: list) -> str:
-    """将检索到的文档拼接成上下文"""
+    """将检索到的文档拼接成上下文，每个 chunk 截断以控制总长度"""
     if not docs:
         return "（无参考资料）"
+
+    MAX_PER_CHUNK = 1500  # 每个 chunk 最多取前 1500 chars (保证语义 + 控制总长)
 
     parts = []
     for i, doc in enumerate(docs, 1):
         src_type = doc.metadata.get("source_type", "[?]")
         src_path = doc.metadata.get("source", "unknown")
         src_name = os.path.basename(src_path) if src_path else "unknown"
+        content = doc.page_content[:MAX_PER_CHUNK]
         parts.append(
-            f"[参考资料 {i}] {src_type} {src_name}\n{doc.page_content}"
+            f"[参考资料 {i}] {src_type} {src_name}\n{content}"
         )
     return "\n\n---\n\n".join(parts)
 
@@ -216,11 +219,14 @@ def answer(question: str) -> dict:
             "route": route,
         }
 
-    # Step 3: 生成（带时间日志）
+    # Step 3: 生成
     context = format_context(docs)
     prompt_text = RAG_PROMPT.format(context=context, question=question)
     t_gen = time.time()
-    response = llm.invoke(prompt_text)
+    try:
+        response = llm.invoke(prompt_text)
+    except Exception:
+        response = "抱歉，生成回答超时，请重试或简化问题。"
     elapsed = time.time() - t_gen
     if elapsed > 5:
         print(f"  [LLM 耗时 {elapsed:.1f}s]", flush=True)

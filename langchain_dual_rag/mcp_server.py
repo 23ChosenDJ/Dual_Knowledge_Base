@@ -128,6 +128,7 @@ def _dispatch(msg):
 
         except Exception as e:
             _log(f"[MCP] 错误:{e}")
+            import traceback; _log(traceback.format_exc())
             return {"jsonrpc": "2.0", "id": rid,
                     "result": {"content": [{"type": "text", "text": f"错误:{e}"}], "isError": True}}
 
@@ -141,6 +142,7 @@ if __name__ == "__main__":
         port = int(sys.argv[2])
 
         class H(BaseHTTPRequestHandler):
+            timeout = 600  # 10分钟超时，给 LLM 足够时间
             def do_POST(s):
                 body = s.rfile.read(int(s.headers.get("Content-Length", 0)))
                 resp = _dispatch(json.loads(body))
