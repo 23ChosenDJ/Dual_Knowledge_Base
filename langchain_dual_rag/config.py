@@ -36,7 +36,7 @@ FUSION_TOP_K = 2             # 双库合并时每库返回数量
 
 # ==================== 模型配置（Ollama 本地） ====================
 EMBED_MODEL = "nomic-embed-text"
-LLM_MODEL = "qwen2.5:0.5b"
+LLM_MODEL = "qwen2.5:7b"
 
 # LLM 请求超时（秒），避免长时间卡住
 # qwen2.5:0.5b 纯 CPU 推理，RAG context 4000 chars 时需 ~60s

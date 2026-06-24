@@ -18,10 +18,11 @@ services:
     depends_on:
       - ollama
     volumes:
-      - rag_index:/app/langchain_dual_rag/chroma_doc_db
-      - rag_index:/app/langchain_dual_rag/chroma_code_db
+      - rag_doc_index:/app/langchain_dual_rag/chroma_doc_db
+      - rag_code_index:/app/langchain_dual_rag/chroma_code_db
     restart: unless-stopped
 
 volumes:
   ollama_data:
-  rag_index:
+  rag_doc_index:
+  rag_code_index:
