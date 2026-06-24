@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  rag-server:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - ollama
+    volumes:
+      - rag_index:/app/langchain_dual_rag/chroma_doc_db
+      - rag_index:/app/langchain_dual_rag/chroma_code_db
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+  rag_index:

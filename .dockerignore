@@ -1,0 +1,15 @@
+.git/
+.vscode/
+.claude/
+docs_temp/
+download_real_docs.py
+
+langchain_dual_rag/venv/
+langchain_dual_rag/__pycache__/
+langchain_dual_rag/chroma_doc_db/
+langchain_dual_rag/chroma_code_db/
+langchain_dual_rag/docs/md/
+langchain_dual_rag/docs/pdf/
+langchain_dual_rag/docs/txt/
+
+*.pyc
